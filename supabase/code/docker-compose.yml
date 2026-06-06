@@ -183,7 +183,7 @@ services:
 
       # CraftLoop: OTP por codigo (template e assunto custom) + janela de 10 min
       GOTRUE_MAILER_OTP_EXP: "600"
-      GOTRUE_MAILER_SUBJECTS_MAGIC_LINK: "Seu código de acesso · CraftLoop"
+      GOTRUE_MAILER_SUBJECTS_MAGIC_LINK: '{{ $m := printf "%v" (index .Data "module") }}Seu código de acesso{{ if eq $m "admin" }} · Módulo Admin{{ else if eq $m "staff" }} · Módulo Produção{{ else if eq $m "client" }} · Módulo Cliente{{ end }}'
       GOTRUE_MAILER_TEMPLATES_MAGIC_LINK: "https://raw.githubusercontent.com/prod-agencia-digital/compose/18-05-2026/supabase/code/otp.html"
 
       GOTRUE_EXTERNAL_PHONE_ENABLED: ${ENABLE_PHONE_SIGNUP}
