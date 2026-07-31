@@ -282,7 +282,18 @@ services:
     command: [ "postgrest" ]
 
   realtime:
-    # This container name looks inconsistent but is correct because realtime constructs tenant id by parsing the subdomain
+    # O upstream resolvia isto com `container_name: realtime-dev.supabase-realtime`, que este
+    # template remove (ver README: "com remocoes de container_name e ports"). O nome NAO era
+    # cosmetico: o Realtime deriva o TENANT do primeiro rotulo do Host, e o kong.yml aponta para
+    # ele. Sem o nome, o Kong nao resolve o upstream e o realtime fica inalcancavel -- sem alarme
+    # nenhum, porque o healthcheck abaixo bate em localhost:4000 DENTRO do container e passa.
+    # O alias devolve um nome resolvivel cujo primeiro rotulo e o tenant semeado por
+    # SEED_SELF_HOST (`realtime-dev`, o mesmo que o healthcheck usa). Mesmo padrao do `api-gw`
+    # do kong. Diagnostico: 503 DNS no Kong; ao apontar para `realtime`, 403 TenantNotFound.
+    networks:
+      default:
+        aliases:
+          - realtime-dev
     image: supabase/realtime:v2.76.5
     restart: unless-stopped
     depends_on:
