@@ -263,7 +263,23 @@ services:
         paths:
           - /storage/v1/
     plugins:
+      # CORS restricted to the CraftLoop fronts (staging + production). Client
+      # files must not be readable via cross-origin fetch from another site in a
+      # logged-in user's browser. NOTE: this is defense in depth, not the primary
+      # access control -- that is the signed URL (short TTL) plus the storage
+      # policies, which already 403 any request without a valid token (curl,
+      # direct navigation, etc.). methods/headers are left at the plugin default
+      # (the preflight echoes the requested headers) so the storage-js
+      # upload/download flow keeps working; only the allowed Origin is narrowed.
       - name: cors
+        config:
+          origins:
+            - https://app.craftloop.app
+            - https://admin.craftloop.app
+            - https://staff.craftloop.app
+            - https://teste.app.craftloop.app
+            - https://teste.admin.craftloop.app
+            - https://teste.staff.craftloop.app
       - name: request-transformer
         config:
           add:
@@ -272,6 +288,14 @@ services:
           replace:
             headers:
               - "Authorization: $LUA_AUTH_EXPR"
+      # nosniff: prevent the browser from re-interpreting the Content-Type of an
+      # object served from storage. Defense in depth over the app's upload-time
+      # allowlist (app-craftloop migration 0097 + octet-stream for .svg/.fig).
+      - name: response-transformer
+        config:
+          add:
+            headers:
+              - "X-Content-Type-Options: nosniff"
       - name: post-function
         config:
           access:
