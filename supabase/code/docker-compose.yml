@@ -184,6 +184,9 @@ services:
 
       # CraftLoop: OTP por codigo (template e assunto custom) + janela de 10 min
       GOTRUE_MAILER_OTP_EXP: "600"
+      # Comprimento do codigo: TEM de casar com CODE_LENGTH do LoginScreen (@craftloop/ui).
+      # GoTrue aceita 6..10 (default 6). Ausente = 6, e o front de 8 nunca habilita "Acessar".
+      GOTRUE_MAILER_OTP_LENGTH: "8"
       GOTRUE_MAILER_SUBJECTS_MAGIC_LINK: '{{ $$m := printf "%v" (index .Data "module") }}Seu código de acesso{{ if eq $$m "admin" }} · Módulo Admin{{ else if eq $$m "staff" }} · Módulo Produção{{ else if eq $$m "client" }} · Módulo Cliente{{ end }}'
       GOTRUE_MAILER_TEMPLATES_MAGIC_LINK: "https://raw.githubusercontent.com/prod-agencia-digital/compose/18-05-2026/supabase/code/otp.html"
 
