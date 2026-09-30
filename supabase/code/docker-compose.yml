@@ -256,9 +256,13 @@ services:
       # GOTRUE_HOOK_SEND_SMS_URI: "pg-functions://postgres/public/custom_access_token_hook"
       # GOTRUE_HOOK_SEND_SMS_SECRETS: "v1,whsec_VGhpcyBpcyBhbiBleGFtcGxlIG9mIGEgc2hvcnRlciBCYXNlNjQgc3RyaW5n"
 
-      # GOTRUE_HOOK_SEND_EMAIL_ENABLED: "false"
-      # GOTRUE_HOOK_SEND_EMAIL_URI: "http://host.docker.internal:54321/functions/v1/email_sender"
-      # GOTRUE_HOOK_SEND_EMAIL_SECRETS: "v1,whsec_VGhpcyBpcyBhbiBleGFtcGxlIG9mIGEgc2hvcnRlciBCYXNlNjQgc3RyaW5n"
+      # CraftLoop (AP27-B06): o e-mail de acesso sai pelo produto. O hook grava o pedido na fila do banco
+      # (public.send_email_hook) e a API envia com o template dela. Ligado POR AMBIENTE, pela variavel
+      # SEND_EMAIL_HOOK_ENABLED do Easypanel (ausente = desligado), porque esta branch serve os dois ambientes.
+      # So ligar depois que a API do ambiente tiver o SMTP e o db-backup o backup.sh sem os dados da fila.
+      # Desligado, o GoTrue envia sozinho, pelo GOTRUE_SMTP_* e pelo template acima.
+      GOTRUE_HOOK_SEND_EMAIL_ENABLED: ${SEND_EMAIL_HOOK_ENABLED:-false}
+      GOTRUE_HOOK_SEND_EMAIL_URI: "pg-functions://postgres/public/send_email_hook"
 
   rest:
     image: postgrest/postgrest:v14.8
