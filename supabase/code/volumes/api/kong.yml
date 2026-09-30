@@ -416,9 +416,15 @@ services:
       #      - ::1
       #    deny: []
 
-  ## Protected Dashboard - catch all remaining routes
+  ## Dashboard (Studio) NAO publicado - catch all remaining routes
+  # CraftLoop (AP27-B14, 2026-09-29): o Studio atras de basic-auth ficava alcancavel por qualquer
+  # dominio que chega ao Kong, inclusive os dos fronts em `/hcgi/platform`, sem MFA e aberto a
+  # tentativa de senha em massa. Ninguem opera por ele (migration e conferencia vao por
+  # `docker exec ... psql` no host), entao a rota responde 403 a todos, no molde do `/mcp` acima.
+  # O container `studio` continua de pe (o `kong` depende dele); numa emergencia, abre-se por
+  # tunel SSH ao container, sem republicar. Reabrir aqui e decisao do owner, nao conserto.
   - name: dashboard
-    _comment: 'Studio: /* -> http://studio:3000/*'
+    _comment: 'Studio: /* -> 403 (nao publicado)'
     url: http://studio:3000/
     routes:
       - name: dashboard-all
@@ -426,7 +432,7 @@ services:
         paths:
           - /
     plugins:
-      - name: cors
-      - name: basic-auth
+      - name: request-termination
         config:
-          hide_credentials: true
+          status_code: 403
+          message: "Access is forbidden."
