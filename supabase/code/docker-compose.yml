@@ -254,8 +254,10 @@ services:
       # GOTRUE_HOOK_MFA_VERIFICATION_ATTEMPT_ENABLED: "true"
       # GOTRUE_HOOK_MFA_VERIFICATION_ATTEMPT_URI: "pg-functions://postgres/public/mfa_verification_attempt"
 
-      # GOTRUE_HOOK_PASSWORD_VERIFICATION_ATTEMPT_ENABLED: "true"
-      # GOTRUE_HOOK_PASSWORD_VERIFICATION_ATTEMPT_URI: "pg-functions://postgres/public/password_verification_attempt"
+      # CraftLoop (decisao 102): a trava do login por senha. A funcao sempre recusa (migration 0386 do app).
+      # Ligado POR AMBIENTE, pela variavel PASSWORD_HOOK_ENABLED do painel, e so depois de a 0386 estar no banco.
+      GOTRUE_HOOK_PASSWORD_VERIFICATION_ATTEMPT_ENABLED: ${PASSWORD_HOOK_ENABLED:-false}
+      GOTRUE_HOOK_PASSWORD_VERIFICATION_ATTEMPT_URI: "pg-functions://postgres/public/password_verification_attempt"
 
       # GOTRUE_HOOK_SEND_SMS_ENABLED: "false"
       # GOTRUE_HOOK_SEND_SMS_URI: "pg-functions://postgres/public/custom_access_token_hook"
