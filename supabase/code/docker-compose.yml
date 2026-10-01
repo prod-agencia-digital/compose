@@ -188,6 +188,12 @@ services:
       # Comprimento do codigo: TEM de casar com CODE_LENGTH do LoginScreen (@craftloop/ui).
       # GoTrue aceita 6..10 (default 6). Ausente = 6, e o front de 8 nunca habilita "Acessar".
       GOTRUE_MAILER_OTP_LENGTH: "8"
+      # Teto de e-mail da instancia INTEIRA, por hora (AP27-M34). O padrao do GoTrue e 30, e o limite e
+      # cobrado ANTES do Send Email Hook (sendEmail, internal/api/mail.go), entao vale com o hook ligado e
+      # no desligamento de emergencia. 500 por decisao do owner (30/09), com o SMTP aguentando 2500 por
+      # hora. Muda por ambiente pela RATE_LIMIT_EMAIL_SENT do Easypanel. NAO ligar o
+      # GOTRUE_RATE_LIMIT_HEADER: a API chama o GoTrue de servidor, e o /otp viraria um balde unico.
+      GOTRUE_RATE_LIMIT_EMAIL_SENT: ${RATE_LIMIT_EMAIL_SENT:-500}
 
       GOTRUE_EXTERNAL_PHONE_ENABLED: ${ENABLE_PHONE_SIGNUP}
       GOTRUE_SMS_AUTOCONFIRM: ${ENABLE_PHONE_AUTOCONFIRM}
