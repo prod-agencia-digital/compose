@@ -392,7 +392,11 @@ services:
       DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
       STORAGE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
       REQUEST_ALLOW_X_FORWARDED_PATH: "true"
-      FILE_SIZE_LIMIT: 52428800
+      # Teto GLOBAL de upload do storage-api: 100 MB (decisao 99 do CraftLoop, 2026-10-01). Mora em quatro
+      # camadas que mudam juntas: este, o file_size_limit do bucket attachments e o CHECK size_bytes (0381) e o
+      # MAX_FILE_BYTES do front. O bucket avatars tem o teto proprio dele (2 MB). Vai ao Deploy da stack ANTES
+      # de o front de 100 MB subir, senao o storage recusa o arquivo entre 50 e 100 MB.
+      FILE_SIZE_LIMIT: 104857600
       STORAGE_BACKEND: s3
       # S3 bucket when using S3 backend, directory name when using 'file'
       GLOBAL_S3_BUCKET: ${STORAGE_S3_BUCKET}
