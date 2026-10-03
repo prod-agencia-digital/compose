@@ -251,8 +251,10 @@ services:
       GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_URI: "pg-functions://postgres/public/custom_access_token_hook"
       # GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_SECRETS: "<standard-base64-secret>"
 
-      # GOTRUE_HOOK_MFA_VERIFICATION_ATTEMPT_ENABLED: "true"
-      # GOTRUE_HOOK_MFA_VERIFICATION_ATTEMPT_URI: "pg-functions://postgres/public/mfa_verification_attempt"
+      # CraftLoop (decisao 137): o bloqueio do segundo fator, 5 erros e 15 minutos (migration 0394 do app).
+      # Ligado POR AMBIENTE, pela variavel MFA_HOOK_ENABLED do painel, e so depois de a 0394 estar no banco.
+      GOTRUE_HOOK_MFA_VERIFICATION_ATTEMPT_ENABLED: ${MFA_HOOK_ENABLED:-false}
+      GOTRUE_HOOK_MFA_VERIFICATION_ATTEMPT_URI: "pg-functions://postgres/public/mfa_verification_attempt"
 
       # CraftLoop (decisao 102): a trava do login por senha. A funcao sempre recusa (migration 0386 do app).
       # Ligado POR AMBIENTE, pela variavel PASSWORD_HOOK_ENABLED do painel, e so depois de a 0386 estar no banco.
