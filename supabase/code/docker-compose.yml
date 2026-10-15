@@ -294,8 +294,11 @@ services:
       PGRST_JWT_SECRET: ${JWT_JWKS:-${JWT_SECRET}}
 
       PGRST_DB_USE_LEGACY_GUCS: "false"
-      PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET}
-      PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXPIRY}
+      # O upstream passa PGRST_APP_SETTINGS_JWT_SECRET e PGRST_APP_SETTINGS_JWT_EXP, que viram os
+      # GUCs app.settings.jwt_secret e app.settings.jwt_exp de TODA transacao do PostgREST: o segredo
+      # HS256 ficava legivel por current_setting() a qualquer papel, authenticated inclusive. Nenhuma
+      # funcao do banco os le (pg_proc medido nos 2 ambientes, CraftLoop, 2026-10-15), e o PostgREST
+      # valida o JWT pelo PGRST_JWT_SECRET acima, nao por eles. Removidos de proposito.
     command: [ "postgrest" ]
 
   realtime:
