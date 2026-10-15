@@ -14,6 +14,13 @@ consumers:
     keyauth_credentials:
       - key: $SUPABASE_SERVICE_KEY
       - key: $SUPABASE_SECRET_KEY
+  # CraftLoop (Fase 2 do rate limit no Kong, 2026-10-15): a API do app, que chama o rest COMO o usuario
+  # (o Bearer dele no Authorization) e nao pode cair nos limites por sessao e por IP do `anon` (a API sai de
+  # um IP so, e muda de IP a cada deploy). Credencial NAO-JWT, so no `apikey`, e o grupo dela so entra no
+  # `rest-v1`. A chave vem da env do compose; vazia, o kong-entrypoint.sh poe uma aleatoria no lugar.
+  - username: api_server
+    keyauth_credentials:
+      - key: $SUPABASE_GATEWAY_KEY
 
 ###
 ### Access Control List
@@ -23,6 +30,47 @@ acls:
     group: anon
   - consumer: service_role
     group: admin
+  - consumer: api_server
+    group: api_server
+
+###
+### Rate limiting (CraftLoop, Fase 2, 2026-10-15)
+###
+# So contra ABUSO (decisao 287 do CraftLoop: «Não pode ser muito baixo. Temos clientes enterprise [...]
+# Somente contra abuso mesmo.»). Uma instancia do plugin por pedido, pela precedencia do Kong: no `rest-v1`
+# vale so a por SESSAO (consumidor + servico vence consumidor sozinho); nos outros servicos com chave
+# (`auth-v1`, `graphql-v1`, `realtime-v1-*`), a por IP. O storage nao tem key-auth e fica fora.
+# Os numeros e a conta estao no canonico do CraftLoop (.memory/pendencias.md, item do rate limit no Kong).
+# 🚑 Para RELAXAR: mudar o numero aqui e `docker restart` no Kong do ambiente (o entrypoint renderiza o
+# arquivo no start); depois o mesmo numero no fork, senao o proximo Deploy daquele ambiente reverte.
+plugins:
+  # Por SESSAO no rest: o `pre-function` do `rest-v1` poe o `session_id` do token em `X-CL-RL-Session`.
+  # Sem sessao (sem token, ou token sem `session_id`), o Kong conta pelo IP real, com os mesmos numeros.
+  # Pico medido de uma sessao (R6, 15/10): 42/s e 163/min; o teto e ~12x. Sem teto por hora: a janela e
+  # fixa, e quem batesse nela ficaria bloqueado ate a virada.
+  - name: rate-limiting
+    service: rest-v1
+    consumer: anon
+    config:
+      second: 500
+      minute: 2000
+      limit_by: header
+      header_name: X-CL-RL-Session
+      policy: local
+      fault_tolerant: true
+      hide_client_headers: false
+  # Por IP real nos outros servicos com chave (inclui o `/token`): 2.000 pessoas atras de um IP, 100%
+  # ativas no mesmo minuto, a 5/min fora do rest (o pico medido), com 3x de folga. Um 429 na renovacao do
+  # token desloga a pessoa (o auth-js apaga a sessao), e por isso o teto e largo.
+  - name: rate-limiting
+    consumer: anon
+    config:
+      second: 1000
+      minute: 30000
+      limit_by: ip
+      policy: local
+      fault_tolerant: true
+      hide_client_headers: false
 
 ###
 ### Dashboard credentials
@@ -37,16 +85,9 @@ basicauth_credentials:
 ###
 services:
   ## Open Auth routes
-  - name: auth-v1-open
-    _comment: 'Auth: /auth/v1/verify* -> http://auth:9999/verify*'
-    url: http://auth:9999/verify
-    routes:
-      - name: auth-v1-open
-        strip_path: true
-        paths:
-          - /auth/v1/verify
-    plugins:
-      - name: cors
+  # CraftLoop (decisao 286, 2026-10-15): o `/auth/v1/verify` saiu daqui e so aceita o service_role, no
+  # `auth-v1-verify` abaixo. Quem confere o codigo de login e a API (`POST /auth/verify-otp`), que conta as
+  # tentativas erradas por e-mail; com ele aberto, o limite dela se contornava chamando o GoTrue direto.
   - name: auth-v1-open-callback
     _comment: 'Auth: /auth/v1/callback* -> http://auth:9999/callback*'
     url: http://auth:9999/callback
@@ -211,6 +252,33 @@ services:
           hide_groups_header: true
           allow:
             - admin
+  # O `/verify` no mesmo molde (decisao 286). Os e-mails do CraftLoop so levam o codigo, e nenhum link aponta
+  # para ca; a API o chama com o service_role no `apikey` e o anon no `Authorization`.
+  - name: auth-v1-verify
+    _comment: 'Auth: /auth/v1/verify* -> http://auth:9999/verify* (service_role only)'
+    url: http://auth:9999/verify
+    routes:
+      - name: auth-v1-verify
+        strip_path: true
+        paths:
+          - /auth/v1/verify
+    plugins:
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
   - name: auth-v1-signup
     _comment: 'Auth: /auth/v1/signup* -> http://auth:9999/signup* (service_role only)'
     url: http://auth:9999/signup
@@ -277,6 +345,44 @@ services:
           - /rest/v1/
     plugins:
       - name: cors
+      # CraftLoop (Fase 2 do rate limit): o balde do rate-limiting do rest e a SESSAO do token, e nao o token
+      # cru (renovar o token nao abre balde novo). Roda antes de tudo (prioridade 1000000) e so prepara o
+      # cabecalho que o rate-limiting (910) le. Sem verificar a assinatura: o segredo JWT nao entra no Kong,
+      # e o token forjado ganha balde proprio, mas o PostgREST o recusa (401) antes do banco; a Fase 2 NAO
+      # contem a inundacao anonima no rest. So as chaves de TOPO valem, por JSON de verdade: o
+      # `user_metadata` e gravavel pela pessoa, e o `app_metadata` do hook tem um `role` proprio. Qualquer
+      # falha deixa o cabecalho ausente, e o rate-limiting conta pelo IP; a falha de AMBIENTE (o sandbox recusar o
+      # `require`, por exemplo, depois de um upgrade do Kong) vai ao log de erro. O cabecalho que o cliente mandar
+      # e apagado antes. Exige `cjson.safe` no KONG_UNTRUSTED_LUA_SANDBOX_REQUIRES. ⚠️ O kong-entrypoint.sh
+      # troca todo cifrao seguido de letra pela env: o codigo abaixo so tem o cifrao antes de aspas.
+      - name: pre-function
+        config:
+          access:
+            - |
+              local H = "X-CL-RL-Session"
+              kong.service.request.clear_header(H)
+              local x = "%x"
+              local UUID = "^" .. x:rep(8) .. "%-" .. x:rep(4) .. "%-"
+                .. x:rep(4) .. "%-" .. x:rep(4) .. "%-" .. x:rep(12) .. "$"
+              local ok, sid = pcall(function()
+                local auth = kong.request.get_header("authorization")
+                if type(auth) ~= "string" or #auth > 4096 then return nil end
+                local p = auth:match("^Bearer [%w%-_]+%.([%w%-_]+)%.[%w%-_]+$")
+                if not p or #p > 3072 then return nil end
+                p = p:gsub("%-", "+"):gsub("_", "/")
+                p = p .. string.rep("=", (4 - #p % 4) % 4)
+                local json = ngx.decode_base64(p)
+                if type(json) ~= "string" then return nil end
+                local t = require("cjson.safe").decode(json)
+                if type(t) ~= "table" or t.role ~= "authenticated" then
+                  return nil
+                end
+                local s = t.session_id
+                if type(s) ~= "string" or not s:match(UUID) then return nil end
+                return s
+              end)
+              if not ok then kong.log.err("cl-rl-session: ", sid) end
+              if ok and sid then kong.service.request.set_header(H, sid) end
       - name: key-auth
         config:
           hide_credentials: false
@@ -294,6 +400,7 @@ services:
           allow:
             - admin
             - anon
+            - api_server
 
   ## Secure GraphQL routes
   - name: graphql-v1

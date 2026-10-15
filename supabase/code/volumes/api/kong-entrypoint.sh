@@ -25,6 +25,16 @@ else
     export LUA_RT_WS_EXPR="\$(query_params.apikey)"
 fi
 
+# CraftLoop (Fase 2 do rate limit, 2026-10-15): a chave do consumidor `api_server` nunca fica sem valor.
+# Ausente da env, o awk abaixo deixaria `$SUPABASE_GATEWAY_KEY` LITERAL no yml (uma chave publica); vazia,
+# o sed apagaria a unica credencial do consumidor. Nos dois casos entra uma chave aleatoria, que ninguem
+# conhece, e a API segue com a anon (o boot dela avisa).
+if [ -z "$SUPABASE_GATEWAY_KEY" ]; then
+    SUPABASE_GATEWAY_KEY="$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')"
+    export SUPABASE_GATEWAY_KEY
+    echo "kong-entrypoint: SUPABASE_GATEWAY_KEY vazia; o consumidor api_server ficou com uma chave aleatoria." >&2
+fi
+
 # Substitute environment variables in the Kong declarative config.
 # Uses awk instead of eval/echo to preserve YAML quoting (eval strips double
 # quotes, breaking "Header: value" patterns that YAML parses as mappings).

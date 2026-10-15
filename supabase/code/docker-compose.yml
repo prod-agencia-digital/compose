@@ -101,7 +101,18 @@ services:
       # https://github.com/supabase/cli/issues/14
       KONG_DNS_ORDER: LAST,A,CNAME
       KONG_DNS_NOT_FOUND_TTL: 1
-      KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth,request-termination,ip-restriction,post-function,response-transformer
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth,request-termination,ip-restriction,post-function,response-transformer,rate-limiting,pre-function
+      # CraftLoop (Fase 2 do rate limit, 2026-10-15): o `pre-function` do `rest-v1` le o token com o
+      # `cjson.safe`, e o sandbox so libera o `require` listado aqui.
+      KONG_UNTRUSTED_LUA_SANDBOX_REQUIRES: cjson.safe
+      # O IP REAL para o rate limit por IP: o Kong confia no X-Forwarded-For que vem da rede `easypanel`
+      # (o Traefik, em modo host, anexa o IP do cliente), e com o recursivo o forjado a esquerda nao conta.
+      # A rede inteira, e nao o /32 do Traefik: o IP dele e de tarefa do swarm e muda ao ser recriado.
+      # Residual: um container de outro projeto do host, nessa rede, forja o XFF, mas ele ja alcanca o
+      # Kong por tras do Traefik.
+      KONG_TRUSTED_IPS: 10.11.0.0/16
+      KONG_REAL_IP_HEADER: X-Forwarded-For
+      KONG_REAL_IP_RECURSIVE: "on"
       KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
       KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
       KONG_PROXY_ACCESS_LOG: /dev/stdout combined
@@ -113,6 +124,9 @@ services:
       SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
       ANON_KEY_ASYMMETRIC: ${ANON_KEY_ASYMMETRIC:-}
       SERVICE_ROLE_KEY_ASYMMETRIC: ${SERVICE_ROLE_KEY_ASYMMETRIC:-}
+      # A chave do consumidor `api_server` (a mesma da env SUPABASE_GATEWAY_KEY do servico `api`). Vazia,
+      # o kong-entrypoint.sh poe uma aleatoria.
+      SUPABASE_GATEWAY_KEY: ${SUPABASE_GATEWAY_KEY:-}
       DASHBOARD_USERNAME: ${DASHBOARD_USERNAME}
       DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD}
     entrypoint: /home/kong/kong-entrypoint.sh
@@ -190,10 +204,12 @@ services:
       GOTRUE_MAILER_OTP_LENGTH: "8"
       # Teto de e-mail da instancia INTEIRA, por hora (AP27-M34). O padrao do GoTrue e 30, e o limite e
       # cobrado ANTES do Send Email Hook (sendEmail, internal/api/mail.go), entao vale com o hook ligado e
-      # no desligamento de emergencia. 500 por decisao do owner (30/09), com o SMTP aguentando 2500 por
-      # hora. Muda por ambiente pela RATE_LIMIT_EMAIL_SENT do Easypanel. NAO ligar o
+      # no desligamento de emergencia. 2000 desde o B4 do CraftLoop (P-b, 15/10): com 500, um IP esgotava o
+      # teto e barrava o login de todos; 2000 fica abaixo dos 2500/h do SMTP, que as notificacoes dividem
+      # (a prioridade do codigo na fila e a 0587). Muda por ambiente pela RATE_LIMIT_EMAIL_SENT do
+      # Easypanel, que, se definida, vence este padrao. NAO ligar o
       # GOTRUE_RATE_LIMIT_HEADER: a API chama o GoTrue de servidor, e o /otp viraria um balde unico.
-      GOTRUE_RATE_LIMIT_EMAIL_SENT: ${RATE_LIMIT_EMAIL_SENT:-500}
+      GOTRUE_RATE_LIMIT_EMAIL_SENT: ${RATE_LIMIT_EMAIL_SENT:-2000}
 
       GOTRUE_EXTERNAL_PHONE_ENABLED: ${ENABLE_PHONE_SIGNUP}
       GOTRUE_SMS_AUTOCONFIRM: ${ENABLE_PHONE_AUTOCONFIRM}
