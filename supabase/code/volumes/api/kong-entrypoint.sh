@@ -28,7 +28,7 @@ fi
 # CraftLoop (Fase 2 do rate limit, 2026-10-15): a chave do consumidor `api_server` nunca fica sem valor.
 # Ausente da env, o awk abaixo deixaria `$SUPABASE_GATEWAY_KEY` LITERAL no yml (uma chave publica); vazia,
 # o sed apagaria a unica credencial do consumidor. Nos dois casos entra uma chave aleatoria, que ninguem
-# conhece, e a API segue com a anon (o boot dela avisa).
+# conhece; a API exige a chave na env dela, e com as duas divergindo ela recebe 401 do Kong (falha fechada).
 if [ -z "$SUPABASE_GATEWAY_KEY" ]; then
     SUPABASE_GATEWAY_KEY="$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')"
     export SUPABASE_GATEWAY_KEY
