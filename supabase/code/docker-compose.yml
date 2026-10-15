@@ -283,7 +283,14 @@ services:
         condition: service_healthy
     environment:
       PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
-      PGRST_DB_SCHEMAS: ${PGRST_DB_SCHEMAS}
+      # O schema storage fica FORA do REST, fixo aqui e nao pela env: o upstream expoe
+      # public,storage,graphql_public, e com o storage no PostgREST quem tem acesso a um projeto grava em
+      # storage.objects pelo /rest/v1 (Content-Profile: storage) uma linha com o metadata que quiser, e a
+      # cota da agencia soma o metadata.size (A1 da auditoria de BD e seguranca do CraftLoop, 2026-10-14).
+      # Nenhum front nem a API leem o storage pelo REST: o caminho e o /storage/v1, que grava a linha final
+      # como superusuario, com o tamanho real. Fixo, uma env esquecida no Easypanel nao reabre a exposicao.
+      # O studio segue lendo a env PGRST_DB_SCHEMAS do Easypanel.
+      PGRST_DB_SCHEMAS: public,graphql_public
       PGRST_DB_MAX_ROWS: ${PGRST_DB_MAX_ROWS:-1000}
       PGRST_DB_EXTRA_SEARCH_PATH: ${PGRST_DB_EXTRA_SEARCH_PATH:-public}
       PGRST_DB_ANON_ROLE: anon
