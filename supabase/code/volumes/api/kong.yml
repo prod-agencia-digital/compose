@@ -98,6 +98,145 @@ services:
     plugins:
       - name: cors
 
+  ## Auth routes that SEND E-MAIL: service_role only
+  # CraftLoop (B4 da auditoria de BD e seguranca, 2026-10-15): com a chave anon, que vai no bundle dos
+  # fronts, qualquer um chamava estas rotas direto pela `auth-v1` abaixo, pulando o portao da API
+  # (`POST /auth/request-otp`: modulo, resposta generica e limites por e-mail e IP). O GoTrue nao limita
+  # por IP aqui (sem `GOTRUE_RATE_LIMIT_HEADER`, de proposito), entao sobravam o teto GLOBAL de e-mail
+  # (500/h, que um atacante esgota e barra o login de todos), 1 e-mail por minuto a cada pessoa, e o 422
+  # do `/otp` para e-mail inexistente como oraculo de cadastro. Agora so o grupo `admin` (service_role)
+  # passa; quem pede o codigo e a API, com o service_role no `apikey` e o anon no `Authorization`.
+  # O request-transformer abaixo NAO troca esse Authorization: o 1o ramo do `$LUA_AUTH_EXPR`
+  # (kong-entrypoint.sh) o mantem quando existe e nao comeca com `Bearer sb_`, entao o GoTrue ve anon.
+  # O prefixo mais longo vence o `/auth/v1/` (router traditional_compatible), e o caminho e normalizado
+  # antes do casamento (barras repetidas, `/./`, `%6F`). Um servico por rota, no molde do `auth-v1-open`:
+  # o `strip_path` tira o caminho inteiro que casou. Sem `cors`: nenhum navegador chama estas rotas.
+  - name: auth-v1-otp
+    _comment: 'Auth: /auth/v1/otp* -> http://auth:9999/otp* (service_role only)'
+    url: http://auth:9999/otp
+    routes:
+      - name: auth-v1-otp
+        strip_path: true
+        paths:
+          - /auth/v1/otp
+    plugins:
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+  - name: auth-v1-magiclink
+    _comment: 'Auth: /auth/v1/magiclink* -> http://auth:9999/magiclink* (service_role only)'
+    url: http://auth:9999/magiclink
+    routes:
+      - name: auth-v1-magiclink
+        strip_path: true
+        paths:
+          - /auth/v1/magiclink
+    plugins:
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+  - name: auth-v1-recover
+    _comment: 'Auth: /auth/v1/recover* -> http://auth:9999/recover* (service_role only)'
+    url: http://auth:9999/recover
+    routes:
+      - name: auth-v1-recover
+        strip_path: true
+        paths:
+          - /auth/v1/recover
+    plugins:
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+  - name: auth-v1-resend
+    _comment: 'Auth: /auth/v1/resend* -> http://auth:9999/resend* (service_role only)'
+    url: http://auth:9999/resend
+    routes:
+      - name: auth-v1-resend
+        strip_path: true
+        paths:
+          - /auth/v1/resend
+    plugins:
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+  - name: auth-v1-signup
+    _comment: 'Auth: /auth/v1/signup* -> http://auth:9999/signup* (service_role only)'
+    url: http://auth:9999/signup
+    routes:
+      - name: auth-v1-signup
+        strip_path: true
+        paths:
+          - /auth/v1/signup
+    plugins:
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+          replace:
+            headers:
+              - "Authorization: $LUA_AUTH_EXPR"
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+
   ## Secure Auth routes
   - name: auth-v1
     _comment: 'Auth: /auth/v1/* -> http://auth:9999/*'
